@@ -125,7 +125,7 @@ def process_segment(infile: str, seg: Segment, segments_dir: str, aom_args: List
     if exists(seg_finished_file):
         return True
 
-    if not exists(seg_finished_file):
+    if not exists(fpf_finished_file):
         with open(join(segments_dir, f'{seg_name}_pass1_ffmpeg_stderr.log'), 'wb') as fferr, open(join(segments_dir, f'{seg_name}_pass1_aomenc_stderr.log'), 'w') as aomerr:
             ff = ffmpeg_segment_pipe(infile, seg, seek=seek, stderr=fferr)
             aom = aom_encode(ff, ['--passes=2', '--pass=1', f'--fpf={fpf_tmp_file}'] + aom_args, '/dev/null', stderr=aomerr)
