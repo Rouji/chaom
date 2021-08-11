@@ -119,6 +119,11 @@ def process_segment(infile: str, seg: Segment, segments_dir: str, aom_args: List
     seg_tmp_file = join(segments_dir, f'_{seg_name}.ivf')
     seg_finished_file = join(segments_dir, f'{seg_name}.ivf')
 
+    def _info(i: str):
+        print(f'chunk {seg_name}: ' + i)
+    def _err(e: str):
+        err(f'chunk {seg_name}: ' + e)
+
     unlink_ignore(fpf_tmp_file)
     unlink_ignore(seg_tmp_file)
 
@@ -127,23 +132,26 @@ def process_segment(infile: str, seg: Segment, segments_dir: str, aom_args: List
 
     if not exists(fpf_finished_file):
         with open(join(segments_dir, f'{seg_name}_pass1_ffmpeg_stderr.log'), 'wb') as fferr, open(join(segments_dir, f'{seg_name}_pass1_aomenc_stderr.log'), 'w') as aomerr:
+            _info('starting 1st pass')
             ff = ffmpeg_segment_pipe(infile, seg, seek=seek, stderr=fferr)
             aom = aom_encode(ff, ['--passes=2', '--pass=1', f'--fpf={fpf_tmp_file}'] + aom_args, '/dev/null', stderr=aomerr)
             if aom.wait() != 0 or ff.wait() != 0:
-                err(f'1st pass of segment {seg_name} failed')
+                _err('1st pass failed')
                 return False
             else:
                 move(fpf_tmp_file, fpf_finished_file)
 
     with open(join(segments_dir, f'{seg_name}_pass2_ffmpeg_stderr.log'), 'wb') as fferr, open(join(segments_dir, f'{seg_name}_pass2_aomenc_stderr.log'), 'w') as aomerr:
+        _info('starting 2nd pass')
         ff = ffmpeg_segment_pipe(infile, seg, seek=seek, stderr=fferr)
         aom = aom_encode(ff, ['--passes=2', '--pass=2', f'--fpf={fpf_finished_file}'] + aom_args, seg_tmp_file, stderr=aomerr)
         if aom.wait() != 0 or ff.wait() != 0:
-            err(f'2nd pass of segment {seg_name} failed')
+            _err('2nd pass failed')
             unlink_ignore(seg_tmp_file)
             return False
 
     move(seg_tmp_file, seg_finished_file)
+    _info('finished')
     return True
 
 
@@ -214,15 +222,20 @@ def main() -> int:
         if not segments or not _iframes:
             return 1
 
+        print(f'found {len(_iframes)} I-frames')
+        print(f'detected {len(segments)} scenes')
+
         fut = [executor.submit(process_segment, infile, seg, tmpdir, aom_args, seek=nearest_iframe(seg, _iframes)) for seg in sorted(segments, key=lambda s: s.end.nr - s.start.nr, reverse=True)]
         res = [f.result() for f in fut]
         if False in res:
+            err('one or more segments failed')
             return 1
 
     with open(join(tmpdir, 'concat_stderr.log'), 'wb') as fferr:
         if not concat(tmpdir, infile, args.output_file, stdout=fferr):
             err('concatenation failed')
             return 1
+
     if not args.keep:
         rmtree(tmpdir)
     return 0
