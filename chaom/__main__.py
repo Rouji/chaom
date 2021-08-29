@@ -14,6 +14,7 @@ from hashlib import md5
 from functools import reduce
 from multiprocessing import cpu_count
 from shutil import move, rmtree
+from datetime import datetime
 import argparse
 from sys import stderr
 
@@ -130,6 +131,8 @@ def process_segment(infile: str, seg: Segment, segments_dir: str, aom_args: List
     if exists(seg_finished_file):
         return True
 
+    start_time = datetime.now()
+
     if not exists(fpf_finished_file):
         with open(join(segments_dir, f'{seg_name}_pass1_ffmpeg_stderr.log'), 'wb') as fferr, open(join(segments_dir, f'{seg_name}_pass1_aomenc_stderr.log'), 'w') as aomerr:
             _info('starting 1st pass')
@@ -151,7 +154,9 @@ def process_segment(infile: str, seg: Segment, segments_dir: str, aom_args: List
             return False
 
     move(seg_tmp_file, seg_finished_file)
-    _info('finished')
+
+    time = datetime.now() - start_time
+    _info(f'finished in {str(time)} ({(seg.end.nr-seg.start.nr)/time.total_seconds()} fps)')
     return True
 
 
